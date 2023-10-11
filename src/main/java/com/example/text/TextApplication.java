@@ -5,62 +5,110 @@ import com.itextpdf.text.pdf.BarcodeEAN;
 import com.itextpdf.text.pdf.BarcodeQRCode;
 import com.itextpdf.text.pdf.PdfContentByte;
 import com.itextpdf.text.pdf.PdfWriter;
+import jakarta.annotation.PostConstruct;
+import org.springframework.aot.generate.ClassNameGenerator;
+import org.springframework.aot.generate.DefaultGenerationContext;
+import org.springframework.aot.generate.FileSystemGeneratedFiles;
+import org.springframework.aot.generate.GeneratedFiles;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.aot.hint.TypeReference;
+import org.springframework.aot.nativex.FileNativeConfigurationWriter;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.javapoet.ClassName;
 import org.springframework.util.Assert;
 import org.springframework.util.SystemPropertyUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.nio.file.Path;
 import java.util.Map;
 
 @SpringBootApplication
-@ImportRuntimeHints(TextApplication.Hints.class)
+@ImportRuntimeHints(TextApplication.ITextRuntimeHintsRegistrar.class)
 public class TextApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(TextApplication.class, args);
     }
 
-    static class Hints implements RuntimeHintsRegistrar {
+    static void write(RuntimeHints hints) {
+
+        var memberCategories = MemberCategory.values();
+        for (var c : new String[]{"com.itextpdf.text.pdf.PdfName",
+                "com.itextpdf.license.LicenseKey", "com.itextpdf.licensekey.LicenseKey"}) {
+            hints.reflection().registerType(TypeReference.of(c), memberCategories);
+        }
+
+        for (var p : new String[]{
+                "com/itextpdf/text/pdf/fonts/glyphlist.txt",
+                "com/itextpdf/text/pdf/fonts/Helvetica.afm",
+                "com/itextpdf/text/pdf/fonts/Helvetica-Bold.afm"}) {
+            hints.resources().registerResource(new ClassPathResource(p));
+        }
+
+        for (var p : "en,nl,pt".split(",")) {
+            hints.resources().registerResource(new ClassPathResource("com/itextpdf/text/l10n/error/" + p + ".lng"));
+        }
+
+    }
+
+    protected FileSystemGeneratedFiles createFileSystemGeneratedFiles() {
+        return new FileSystemGeneratedFiles(this::getRoot);
+    }
+
+    private static final File ROOT = new File(SystemPropertyUtils.resolvePlaceholders("${HOME}/Desktop/json/"));
+
+    private Path getRoot(GeneratedFiles.Kind kind) {
+
+        var file = new File(ROOT, switch (kind) {
+            case SOURCE -> "source";
+            case RESOURCE -> "resources";
+            case CLASS -> "classes";
+        });
+        return (file).toPath();
+    }
+
+    protected static void writeHints(RuntimeHints hints) {
+        FileNativeConfigurationWriter writer = new FileNativeConfigurationWriter( ROOT.toPath(), "bootiful", "itext");
+        writer.write(hints);
+    }
+
+    private static File ensureExists(File file) {
+        Assert.state(file.exists() || file.mkdirs(), "the folder [" + file.getAbsolutePath() + "] does not exist");
+        return file;
+    }
+
+    @PostConstruct
+    public void runtime() {
+
+        var dgc = new DefaultGenerationContext(
+                new ClassNameGenerator(ClassName.get(ITextRuntimeHintsRegistrar.class)),
+                createFileSystemGeneratedFiles());
+        var hints = dgc.getRuntimeHints();
+        write(hints);
+        dgc.writeGeneratedContent();
+        writeHints(hints);
+    }
+
+    static class ITextRuntimeHintsRegistrar implements RuntimeHintsRegistrar {
 
         @Override
         public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-
-
-            var memberCategories = MemberCategory.values();
-            for (var c : new String[]{"com.itextpdf.text.pdf.PdfName",
-                    "com.itextpdf.license.LicenseKey", "com.itextpdf.licensekey.LicenseKey"}) {
-                hints.reflection().registerType(TypeReference.of(c), memberCategories);
-            }
-
-            for (var p : new String[]{
-                    "com/itextpdf/text/pdf/fonts/glyphlist.txt",
-                    "com/itextpdf/text/pdf/fonts/Helvetica.afm",
-                    "com/itextpdf/text/pdf/fonts/Helvetica-Bold.afm"}) {
-                hints.resources().registerResource(new ClassPathResource(p));
-            }
-
-            for (var p : "en,nl,pt".split(",")) {
-                hints.resources().registerResource(new ClassPathResource("com/itextpdf/text/l10n/error/" + p + ".lng"));
-            }
-
+            write(hints);
         }
     }
 
     private static File pdf(String name) {
         var f = new File(SystemPropertyUtils.resolvePlaceholders("${HOME}/Desktop/itext-native/" + name + ".pdf"));
         var pf = f.getParentFile();
-        Assert.state(pf.exists() || pf.mkdirs(),
-                "the directory [" + pf.getAbsolutePath() + "] does not exist");
+        ensureExists(pf);
         return f;
     }
 
