@@ -15,6 +15,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -26,11 +27,16 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.util.Map;
 
-@SpringBootApplication
+@Configuration
 @ImportRuntimeHints(TextApplication.ITextRuntimeHintsRegistrar.class)
+class MyItextAutoConfiguration {
+}
+
+@SpringBootApplication
 public class TextApplication {
 
     public static void main(String[] args) throws IOException {
@@ -118,8 +124,8 @@ public class TextApplication {
         return f;
     }
 
-    private static void simple1() throws Exception {
-        try (var out = new FileOutputStream(pdf("simple-1"))) {
+    private static void sample1() throws Exception {
+        try (var out = new FileOutputStream(pdf("sample-1"))) {
             var document = new Document();
             PdfWriter.getInstance(document, out);
             document.open();
@@ -139,7 +145,7 @@ public class TextApplication {
         }
     }
 
-    static void simple2() throws Exception {
+    static void sample2() throws Exception {
         var code = "123456789";
         try (var out = new FileOutputStream(pdf("barcode"))) {
             var document = new Document();
@@ -154,7 +160,7 @@ public class TextApplication {
         }
     }
 
-    static void simple3() throws Exception {
+    static void sample3() throws Exception {
         var code = "123456789";
         try (var out = new FileOutputStream(pdf("qrcode"))) {
             var document = new Document();
@@ -167,14 +173,48 @@ public class TextApplication {
         }
     }
 
-    static void simple4() throws Exception {
+    static void sample4() throws Exception {
 
         var written = pdf("qrcode");
         try (var in = new FileInputStream(written)) {
             var pdfReader = new PdfReader(in);
             var page = pdfReader.getPageN(1);
             Assert.notNull(page, "the page should not be null");
+            System.out.println("-------");
             var arrayForBoundingBox = page.getAsArray(PdfName.MEDIABOX);
+            arrayForBoundingBox.forEach(pdfObject -> System.out.println(pdfObject.toString()));
+        }
+    }
+
+    static void sample6() throws Exception {
+
+        var code = "123456789";
+        try (var out = new FileOutputStream(pdf("qrcode-encrypted"))) {
+            var document = new Document();
+            var pdfWriter = PdfWriter.getInstance(document, out);
+            pdfWriter.setEncryption(
+                    "user".getBytes(Charset.defaultCharset()),
+                    "owner".getBytes(Charset.defaultCharset()),
+                    PdfWriter.ALLOW_PRINTING,
+                    PdfWriter.ENCRYPTION_AES_256
+            );
+            document.open();
+            var barcode = new BarcodeQRCode(code, 100, 100, Map.of());
+            var img = (barcode.getImage());
+            document.add(img);
+            document.close();
+        }
+    }
+
+    static void sample7() throws Exception {
+        var encrypted = pdf("qrcode-encrypted");
+        Assert.state(encrypted.exists(), "the encrypted directory must exist");
+        try (var in = new FileInputStream(encrypted)) {
+            var pdfReader = new PdfReader(in, "owner".getBytes(Charset.defaultCharset()));
+            var page = pdfReader.getPageN(1);
+            Assert.notNull(page, "the page should not be null");
+            var arrayForBoundingBox = page.getAsArray(PdfName.MEDIABOX);
+            System.out.println("-------");
             arrayForBoundingBox.forEach(pdfObject -> System.out.println(pdfObject.toString()));
         }
     }
@@ -182,10 +222,13 @@ public class TextApplication {
     @Bean
     ApplicationRunner test() {
         return args -> {
-            simple3();
-            simple2();
-            simple1();
-            simple4();
+            sample3();
+            sample2();
+            sample1();
+            sample4();
+            sample6();
+            sample7();
         };
+
     }
 }

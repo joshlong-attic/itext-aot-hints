@@ -28,6 +28,20 @@
             <artifactId>itextpdf</artifactId>
             <version>${itext.version}</version>
         </dependency>
+
+
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk15to18</artifactId>
+            <version>1.71</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk15to18</artifactId>
+            <version>1.71</version>
+        </dependency>
+
+
         <dependency>
             <groupId>com.itextpdf</groupId>
             <artifactId>itext-hyph-xml</artifactId>
