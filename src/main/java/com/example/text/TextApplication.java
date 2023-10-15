@@ -1,11 +1,7 @@
 package com.example.text;
 
 import com.itextpdf.text.*;
-import com.itextpdf.text.pdf.BarcodeEAN;
-import com.itextpdf.text.pdf.BarcodeQRCode;
-import com.itextpdf.text.pdf.PdfContentByte;
-import com.itextpdf.text.pdf.PdfWriter;
-import jakarta.annotation.PostConstruct;
+import com.itextpdf.text.pdf.*;
 import org.springframework.aot.generate.ClassNameGenerator;
 import org.springframework.aot.generate.DefaultGenerationContext;
 import org.springframework.aot.generate.FileSystemGeneratedFiles;
@@ -21,12 +17,15 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.javapoet.ClassName;
 import org.springframework.util.Assert;
 import org.springframework.util.SystemPropertyUtils;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
 
@@ -34,36 +33,43 @@ import java.util.Map;
 @ImportRuntimeHints(TextApplication.ITextRuntimeHintsRegistrar.class)
 public class TextApplication {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         SpringApplication.run(TextApplication.class, args);
     }
 
     static void write(RuntimeHints hints) {
+        try {
+            var resourcePatternResolver = new PathMatchingResourcePatternResolver();
+            var memberCategories = MemberCategory.values();
+            for (var c : new String[]{"com.itextpdf.text.pdf.PdfName",
+                    "com.itextpdf.license.LicenseKey", "com.itextpdf.licensekey.LicenseKey"}) {
+                hints.reflection().registerType(TypeReference.of(c), memberCategories);
+            }
 
-        var memberCategories = MemberCategory.values();
-        for (var c : new String[]{"com.itextpdf.text.pdf.PdfName",
-                "com.itextpdf.license.LicenseKey", "com.itextpdf.licensekey.LicenseKey"}) {
-            hints.reflection().registerType(TypeReference.of(c), memberCategories);
+            var fontResources = resourcePatternResolver
+                    .getResources("com/itextpdf/text/pdf/fonts/*");
+            for (var r : fontResources) {
+                if (r.exists()) {
+                    hints.resources().registerResource(r);
+                }
+            }
+
+            for (var p : "en,nl,pt".split(",")) {
+                hints.resources().registerResource(
+                        new ClassPathResource("com/itextpdf/text/l10n/error/" + p + ".lng"));
+            }
+        }//
+        catch (Throwable t) {
+            throw new RuntimeException("oops", t);
         }
-
-        for (var p : new String[]{
-                "com/itextpdf/text/pdf/fonts/glyphlist.txt",
-                "com/itextpdf/text/pdf/fonts/Helvetica.afm",
-                "com/itextpdf/text/pdf/fonts/Helvetica-Bold.afm"}) {
-            hints.resources().registerResource(new ClassPathResource(p));
-        }
-
-        for (var p : "en,nl,pt".split(",")) {
-            hints.resources().registerResource(new ClassPathResource("com/itextpdf/text/l10n/error/" + p + ".lng"));
-        }
-
     }
 
     protected FileSystemGeneratedFiles createFileSystemGeneratedFiles() {
         return new FileSystemGeneratedFiles(this::getRoot);
     }
 
-    private static final File ROOT = new File(SystemPropertyUtils.resolvePlaceholders("${HOME}/Desktop/json/"));
+    private static final File ROOT = new File(SystemPropertyUtils
+            .resolvePlaceholders("${HOME}/Desktop/json/"));
 
     private Path getRoot(GeneratedFiles.Kind kind) {
 
@@ -76,7 +82,7 @@ public class TextApplication {
     }
 
     protected static void writeHints(RuntimeHints hints) {
-        FileNativeConfigurationWriter writer = new FileNativeConfigurationWriter( ROOT.toPath(), "bootiful", "itext");
+        var writer = new FileNativeConfigurationWriter(ROOT.toPath(), "bootiful", "itext");
         writer.write(hints);
     }
 
@@ -85,7 +91,7 @@ public class TextApplication {
         return file;
     }
 
-    @PostConstruct
+    // @PostConstruct
     public void runtime() {
 
         var dgc = new DefaultGenerationContext(
@@ -161,12 +167,25 @@ public class TextApplication {
         }
     }
 
+    static void simple4() throws Exception {
+
+        var written = pdf("qrcode");
+        try (var in = new FileInputStream(written)) {
+            var pdfReader = new PdfReader(in);
+            var page = pdfReader.getPageN(1);
+            Assert.notNull(page, "the page should not be null");
+            var arrayForBoundingBox = page.getAsArray(PdfName.MEDIABOX);
+            arrayForBoundingBox.forEach(pdfObject -> System.out.println(pdfObject.toString()));
+        }
+    }
+
     @Bean
     ApplicationRunner test() {
         return args -> {
             simple3();
             simple2();
             simple1();
+            simple4();
         };
     }
 }
