@@ -45,13 +45,19 @@ public class TextApplication {
 
     static void write(RuntimeHints hints) {
         try {
-            var resourcePatternResolver = new PathMatchingResourcePatternResolver();
+
+            // serialization todo
+            // hints.serialization().registerType( TypeReference.of("a.b.c.Foo"));
+
+            // reflection
             var memberCategories = MemberCategory.values();
             for (var c : new String[]{"com.itextpdf.text.pdf.PdfName",
                     "com.itextpdf.license.LicenseKey", "com.itextpdf.licensekey.LicenseKey"}) {
                 hints.reflection().registerType(TypeReference.of(c), memberCategories);
             }
 
+            // resources
+            var resourcePatternResolver = new PathMatchingResourcePatternResolver();
             var fontResources = resourcePatternResolver
                     .getResources("com/itextpdf/text/pdf/fonts/*");
             for (var r : fontResources) {
